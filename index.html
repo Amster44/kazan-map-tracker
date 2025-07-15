@@ -168,6 +168,7 @@
         return {
           address: obj["Адрес"], order: obj["№ заказа"], container: obj["Тарное место"],
           type: obj["Тип детали"], item: obj["Наименование"], qty: obj["Кол-во"], delivered: obj["Дата досыла"],
+          shipped: obj["Дата отгрузки"],
           lat: obj["LAT"].replace(',', '.'), lng: obj["LNG"].replace(',', '.')
         };
       });
@@ -187,7 +188,9 @@
         const totalQty = orderDetails.reduce((sum, el) => sum + parseInt(el.qty || '0'), 0);
         content += `<hr><b>Лифт ${order}</b> — <i>${totalQty} шт</i>`;
         const delivered = byOrder[order].delivered;
+        const shipped = orderDetails[0].shipped;
         if (delivered) content += `<div><i>Досыл: ${delivered}</i></div>`;
+        if (shipped) content += `<div><i>Отгрузка: ${shipped}</i></div>`;
         content += '<ul>';
         orderDetails.forEach(el => {
           content += `<li><b>${el.type}</b>: ${el.item} — ${el.qty} шт. (ТМ: ${el.container})</li>`;
