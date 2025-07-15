@@ -55,11 +55,11 @@
       <button onclick="toggleAllFilters(false)">Убрать все</button>
       <button onclick="toggleDelivered()" id="deliveredBtn">Скрыть доставленные</button>
     </div>
+    <div id="filters"></div>
     <div class="sort-controls">
       <button onclick="setSort('asc')">Старые → новые</button>
       <button onclick="setSort('desc')">Новые → старые</button>
     </div>
-    <div id="filters"></div>
     <div id="summary" class="summary"></div>
   </div>
   <div id="map"></div>
@@ -201,26 +201,27 @@
       let content = `<b>${address}</b><br>`;
       const byOrder = {};
       group.forEach(entry => {
-        if (!byOrder[entry.order]) byOrder[entry.order] = { details: [], delivered: entry.delivered };
-        byOrder[entry.order].details.push(entry);
+        if (!byOrder[entry.order]) byOrder[entry.order] = { delivered: [], pending: [] };
+        (entry.delivered ? byOrder[entry.order].delivered : byOrder[entry.order].pending).push(entry);
       });
 
       for (const order in byOrder) {
-        const orderDetails = byOrder[order].details;
-        const totalQty = orderDetails.reduce((sum, el) => sum + parseInt(el.qty || '0'), 0);
-        content += `<hr><b>Лифт ${order}</b> — <i>${totalQty} шт</i>`;
+        const pending = byOrder[order].pending;
         const delivered = byOrder[order].delivered;
-        const shipped = orderDetails[0].shipped;
-        if (delivered) content += `<div><i>Досыл: ${delivered}</i></div>`;
-        if (shipped) content += `<div><i>Отгрузка: ${shipped}</i></div>`;
+        const totalQty = [...pending, ...delivered].reduce((sum, el) => sum + parseInt(el.qty || '0'), 0);
+        content += `<hr><b>Лифт ${order}</b> — <i>${totalQty} шт</i>`;
         content += '<ul>';
-        orderDetails.forEach(el => {
+        pending.forEach(el => {
           content += `<li><b>${el.type}</b>: ${el.item} — ${el.qty} шт. (ТМ: ${el.container})</li>`;
+        });
+        if (delivered.length) content += '<li><i>↓ Доставленные ↓</i></li>';
+        delivered.forEach(el => {
+          content += `<li style="color:green"><b>${el.type}</b>: ${el.item} — ${el.qty} шт. (ТМ: ${el.container})</li>`;
         });
         content += '</ul>';
       }
 
-      const isDelivered = group.some(g => g.delivered);
+      const isDelivered = group.every(g => g.delivered);
       return new ymaps.Placemark(coords, {
         balloonContent: content
       }, {
