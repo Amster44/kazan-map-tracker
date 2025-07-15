@@ -15,6 +15,10 @@
       z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
       border-radius: 12px; min-width: 260px; max-height: 90%; overflow-y: auto;
       border: 1px solid #ddd;
+      transition: transform 0.3s ease;
+    }
+    .sidebar.hidden {
+      transform: translateX(-120%);
     }
     .sidebar h3 {
       margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 5px;
@@ -31,21 +35,23 @@
     .filter-list {
       margin-left: 10px; display: none;
     }
-    .summary {
-      margin-top: 10px; font-size: 0.9em; color: #333;
+    .toggle-btn {
+      position: absolute; top: 10px; left: 10px;
+      z-index: 1100; background: #fff; border: 1px solid #ccc; padding: 6px 10px;
+      border-radius: 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
   </style>
   <script src="https://api-maps.yandex.ru/2.1/?apikey=a493d8d9-6875-4c13-91d6-08e7703b879f&lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
-  <div class="sidebar">
+  <div class="toggle-btn" onclick="toggleSidebar()">☰ Меню</div>
+  <div class="sidebar" id="sidebar">
     <h3>Фильтр по деталям</h3>
     <div class="filter-controls">
       <button onclick="toggleAllFilters(true)">Выбрать все</button>
       <button onclick="toggleAllFilters(false)">Убрать все</button>
     </div>
     <div id="filters"></div>
-    <div id="summary" class="summary"></div>
   </div>
   <div id="map"></div>
   <script>
@@ -57,6 +63,10 @@
     const allPlacemarks = [];
     const filters = {};
     const activeFilters = new Set();
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('hidden');
+    }
 
     function toggleAllFilters(state) {
       document.querySelectorAll('#filters input[type=checkbox]').forEach(cb => {
@@ -73,15 +83,11 @@
       allPlacemarks.length = 0;
 
       const filteredGroups = {};
-      const summary = {};
       allData.forEach(entry => {
         if (!activeFilters.has(entry.item)) return;
         const coordKey = `${entry.lat},${entry.lng}`;
         if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
         filteredGroups[coordKey].items.push(entry);
-
-        const summaryKey = `${entry.item}`;
-        summary[summaryKey] = (summary[summaryKey] || 0) + parseInt(entry.qty || '0');
       });
 
       for (const key in filteredGroups) {
@@ -90,9 +96,6 @@
         map.geoObjects.add(placemark);
         allPlacemarks.push({ placemark });
       }
-
-      const summaryDiv = document.getElementById('summary');
-      summaryDiv.innerHTML = '<b>Итоговое количество:</b><br>' + Object.entries(summary).map(([name, qty]) => `${name}: ${qty} шт.`).join('<br>');
     }
 
     function renderFilters() {
@@ -102,7 +105,8 @@
         const div = document.createElement('div');
         const title = document.createElement('div');
         title.className = 'filter-category';
-        title.textContent = type;
+        const total = items.reduce((sum, name) => sum + (filters[type + '__count__' + name] || 0), 0);
+        title.textContent = `${type} (${total} шт)`;
         const list = document.createElement('div');
         list.className = 'filter-list';
         items.forEach(val => {
@@ -116,8 +120,9 @@
             else activeFilters.delete(val);
             refreshMap();
           };
+          const count = filters[type + '__count__' + val] || 0;
           label.appendChild(input);
-          label.appendChild(document.createTextNode(' ' + val));
+          label.appendChild(document.createTextNode(` ${val} (${count})`));
           list.appendChild(label);
           list.appendChild(document.createElement('br'));
         });
@@ -192,9 +197,13 @@
         allData.forEach(row => {
           if (!filters[row.type]) filters[row.type] = new Set();
           filters[row.type].add(row.item);
+          const key = row.type + '__count__' + row.item;
+          filters[key] = (filters[key] || 0) + parseInt(row.qty || '0');
           activeFilters.add(row.item);
         });
-        for (const key in filters) filters[key] = Array.from(filters[key]);
+        for (const key in filters) {
+          if (filters[key] instanceof Set) filters[key] = Array.from(filters[key]);
+        }
         renderFilters();
         refreshMap();
       });
