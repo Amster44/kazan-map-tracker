@@ -26,7 +26,7 @@
     .filter-controls {
       margin-bottom: 10px;
     }
-    .filter-controls button {
+    .filter-controls button, .sort-controls button {
       font-size: 14px; padding: 4px 8px; margin: 5px 5px 5px 0; cursor: pointer;
     }
     .filter-category {
@@ -55,6 +55,10 @@
       <button onclick="toggleAllFilters(false)">Убрать все</button>
       <button onclick="toggleDelivered()" id="deliveredBtn">Скрыть доставленные</button>
     </div>
+    <div class="sort-controls">
+      <button onclick="setSort('asc')">Старые → новые</button>
+      <button onclick="setSort('desc')">Новые → старые</button>
+    </div>
     <div id="filters"></div>
     <div id="summary" class="summary"></div>
   </div>
@@ -69,6 +73,7 @@
     const filters = {};
     const activeFilters = new Set();
     let hideDelivered = false;
+    let sortOrder = null;
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('hidden');
@@ -90,14 +95,31 @@
       refreshMap();
     }
 
+    function setSort(order) {
+      sortOrder = order;
+      refreshMap();
+    }
+
     function refreshMap() {
       map.geoObjects.removeAll();
       allPlacemarks.length = 0;
 
+      let filteredData = allData.filter(entry => {
+        if (!activeFilters.has(entry.item)) return false;
+        if (hideDelivered && entry.delivered) return false;
+        return true;
+      });
+
+      if (sortOrder) {
+        filteredData.sort((a, b) => {
+          const da = new Date(a.shipped || '1970-01-01');
+          const db = new Date(b.shipped || '1970-01-01');
+          return sortOrder === 'asc' ? da - db : db - da;
+        });
+      }
+
       const filteredGroups = {};
-      allData.forEach(entry => {
-        if (!activeFilters.has(entry.item)) return;
-        if (hideDelivered && entry.delivered) return;
+      filteredData.forEach(entry => {
         const coordKey = `${entry.lat},${entry.lng}`;
         if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
         filteredGroups[coordKey].items.push(entry);
@@ -198,10 +220,11 @@
         content += '</ul>';
       }
 
+      const isDelivered = group.some(g => g.delivered);
       return new ymaps.Placemark(coords, {
         balloonContent: content
       }, {
-        preset: 'islands#circleIcon', iconColor: 'red'
+        preset: 'islands#circleIcon', iconColor: isDelivered ? 'green' : 'red'
       });
     }
 
