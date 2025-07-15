@@ -95,16 +95,12 @@
       allPlacemarks.length = 0;
 
       const filteredGroups = {};
-      const summary = {};
       allData.forEach(entry => {
         if (!activeFilters.has(entry.item)) return;
         if (hideDelivered && entry.delivered) return;
         const coordKey = `${entry.lat},${entry.lng}`;
         if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
         filteredGroups[coordKey].items.push(entry);
-
-        const summaryKey = `${entry.item}`;
-        summary[summaryKey] = (summary[summaryKey] || 0) + parseInt(entry.qty || '0');
       });
 
       for (const key in filteredGroups) {
@@ -113,9 +109,6 @@
         map.geoObjects.add(placemark);
         allPlacemarks.push({ placemark });
       }
-
-      const summaryDiv = document.getElementById('summary');
-      summaryDiv.innerHTML = '';
     }
 
     function renderFilters() {
@@ -175,7 +168,7 @@
         return {
           address: obj["Адрес"], order: obj["№ заказа"], container: obj["Тарное место"],
           type: obj["Тип детали"], item: obj["Наименование"], qty: obj["Кол-во"], delivered: obj["Дата досыла"],
-          lat: obj["LAT"], lng: obj["LNG"]
+          lat: obj["LAT"].replace(',', '.'), lng: obj["LNG"].replace(',', '.')
         };
       });
       callback(data);
