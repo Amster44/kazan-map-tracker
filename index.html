@@ -1,250 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <title>Карта Казани — Некомплект по лифтам (Яндекс)</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Карта неконплекта</title>
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
   <style>
-    html, body, #map {
-      width: 100%; height: 100%; margin: 0; padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
     }
-    .sidebar {
-      position: absolute; top: 10px; left: 10px;
-      background: rgba(255, 255, 255, 0.95); padding: 15px;
-      z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      border-radius: 12px; min-width: 260px; max-height: 90%; overflow-y: auto;
-      border: 1px solid #ddd;
-      transition: transform 0.3s ease;
+    #map {
+      width: 100%;
+      height: 100%;
     }
-    .sidebar.hidden {
-      transform: translateX(-120%);
+    #sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px;
+      overflow-y: auto;
+      max-height: 100%;
+      max-width: 300px;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.2);
     }
-    .sidebar h3 {
-      margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 5px;
+    .group {
+      margin-bottom: 1em;
     }
-    .filter-controls {
-      margin-bottom: 10px;
+    .group summary {
+      font-weight: bold;
+      cursor: pointer;
     }
-    .filter-controls button, .sort-controls button {
-      font-size: 14px; padding: 4px 8px; margin: 5px 5px 5px 0; cursor: pointer;
+    .checkbox-item {
+      display: block;
+      margin-left: 1em;
     }
-    .filter-category {
-      font-weight: bold; margin-top: 10px; cursor: pointer;
-    }
-    .filter-list {
-      margin-left: 10px; display: none;
-    }
-    .summary {
-      margin-top: 10px; font-size: 0.9em; color: #333;
-    }
-    .toggle-btn {
-      position: absolute; top: 10px; left: 10px;
-      z-index: 1100; background: #fff; border: 1px solid #ccc; padding: 6px 10px;
-      border-radius: 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    #toggle-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
     }
   </style>
-  <script src="https://api-maps.yandex.ru/2.1/?apikey=a493d8d9-6875-4c13-91d6-08e7703b879f&lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
-  <div class="toggle-btn" onclick="toggleSidebar()">☰ Меню</div>
-  <div class="sidebar" id="sidebar">
-    <h3>Фильтр по деталям</h3>
-    <div class="filter-controls">
-      <button onclick="toggleAllFilters(true)">Выбрать все</button>
-      <button onclick="toggleAllFilters(false)">Убрать все</button>
-      <button onclick="toggleDelivered()" id="deliveredBtn">Скрыть доставленные</button>
-    </div>
-    <div id="filters"></div>
-    <div class="sort-controls">
-      <button onclick="setSort('asc')">Старые → новые</button>
-      <button onclick="setSort('desc')">Новые → старые</button>
-    </div>
-    <div id="summary" class="summary"></div>
+  <div id="sidebar"></div>
+  <div id="toggle-panel">
+    <button onclick="selectAll(true)">Выбрать всё</button>
+    <button onclick="selectAll(false)">Убрать всё</button>
+    <button onclick="location.reload()">Обновить карту</button>
   </div>
   <div id="map"></div>
+
   <script>
-    const SHEET_ID = '1iMyG1z0ramdCKAX-5V-0CwWlZiFrqzwP4ujVSG8EN6k';
-    const API_KEY = 'AIzaSyCAfEIQCxvq4vWZUfjKJ9ylQzGfg7Z0LAk';
-    const RANGE = 'не комплект!A1:Z2000';
+    const spreadsheetId = '1iMyG1z0ramdCKAX-5V-0CwWlZiFrqzwP4ujVSG8EN6k';
+    const sheetName = 'не комплект';
+    const apiKey = 'AIzaSyAdWV1lISfXjABrojS3JR_4wwh3m-hEhWM';
+    const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}?key=${apiKey}`;
 
-    let allData = [], map;
-    const allPlacemarks = [];
-    const filters = {};
-    const activeFilters = new Set();
-    let hideDelivered = false;
-    let sortOrder = null;
+    let map;
+    let markers = [];
+    let filters = {};
 
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('hidden');
+    async function fetchSheet() {
+      const res = await fetch(sheetUrl);
+      const data = await res.json();
+      return data.values;
     }
 
-    function toggleAllFilters(state) {
-      document.querySelectorAll('#filters input[type=checkbox]').forEach(cb => {
+    function selectAll(state) {
+      document.querySelectorAll('#sidebar input[type="checkbox"]').forEach(cb => {
         cb.checked = state;
-        const value = cb.value;
-        if (state) activeFilters.add(value);
-        else activeFilters.delete(value);
       });
-      refreshMap();
+      renderMarkers();
     }
 
-    function toggleDelivered() {
-      hideDelivered = !hideDelivered;
-      document.getElementById('deliveredBtn').textContent = hideDelivered ? 'Показать доставленные' : 'Скрыть доставленные';
-      refreshMap();
+    function clearMarkers() {
+      markers.forEach(m => map.geoObjects.remove(m));
+      markers = [];
     }
 
-    function setSort(order) {
-      sortOrder = order;
-      refreshMap();
-    }
+    async function renderMarkers() {
+      clearMarkers();
+      const rows = await fetchSheet();
+      const headers = rows[0];
+      const data = rows.slice(1);
 
-    function refreshMap() {
-      map.geoObjects.removeAll();
-      allPlacemarks.length = 0;
+      const idx = {
+        address: headers.indexOf('Адрес'),
+        order: headers.indexOf('Номер заказа'),
+        type: headers.indexOf('Тип детали'),
+        name: headers.indexOf('Наименование'),
+        qty: headers.indexOf('Количество'),
+        lat: headers.indexOf('LAT'),
+        lng: headers.indexOf('LNG'),
+        delivered: headers.indexOf('Дата досыла')
+      };
 
-      let filteredData = allData.filter(entry => {
-        if (!activeFilters.has(entry.item)) return false;
-        if (hideDelivered && entry.delivered) return false;
-        return true;
+      const grouped = {};
+      data.forEach(row => {
+        const type = row[idx.type];
+        const name = row[idx.name];
+        if (!grouped[type]) grouped[type] = {};
+        if (!grouped[type][name]) grouped[type][name] = 0;
+        grouped[type][name] += +row[idx.qty] || 0;
       });
 
-      if (sortOrder) {
-        filteredData.sort((a, b) => {
-          const da = new Date(a.shipped || '1970-01-01');
-          const db = new Date(b.shipped || '1970-01-01');
-          return sortOrder === 'asc' ? da - db : db - da;
+      createFilterUI(grouped);
+
+      data.forEach(row => {
+        const type = row[idx.type];
+        const name = row[idx.name];
+        const lat = parseFloat((row[idx.lat] || '').replace(',', '.'));
+        const lng = parseFloat((row[idx.lng] || '').replace(',', '.'));
+        const qty = row[idx.qty];
+        const address = row[idx.address];
+        const delivered = row[idx.delivered];
+
+        if (!filters[type]?.[name]) return;
+        if (!lat || !lng) return;
+
+        const color = delivered ? 'green' : 'red';
+
+        const placemark = new ymaps.Placemark([lat, lng], {
+          balloonContent: `<b>${address}</b><br/>${type}: ${name}<br/>Кол-во: ${qty}<br/>${delivered ? '✅ Доставлено' : '⛔ Не доставлено'}`
+        }, {
+          preset: `islands#circleIcon`,
+          iconColor: color
         });
-      }
 
-      const filteredGroups = {};
-      filteredData.forEach(entry => {
-        const coordKey = `${entry.lat},${entry.lng}`;
-        if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
-        filteredGroups[coordKey].items.push(entry);
-      });
-
-      for (const key in filteredGroups) {
-        const group = filteredGroups[key];
-        const placemark = createPlacemark(group.coords, group.items, group.items[0].address);
+        markers.push(placemark);
         map.geoObjects.add(placemark);
-        allPlacemarks.push({ placemark });
-      }
+      });
     }
 
-    function renderFilters() {
-      const container = document.getElementById('filters');
-      container.innerHTML = '';
-      Object.entries(filters).forEach(([type, items]) => {
-        const div = document.createElement('div');
-        const title = document.createElement('div');
-        title.className = 'filter-category';
-        title.textContent = type;
-        const list = document.createElement('div');
-        list.className = 'filter-list';
-        items.forEach(([val, count]) => {
+    function createFilterUI(grouped) {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.innerHTML = '';
+      filters = {};
+      for (const [type, names] of Object.entries(grouped)) {
+        const group = document.createElement('details');
+        group.className = 'group';
+        group.open = true;
+        group.innerHTML = `<summary>${type}</summary>`;
+        filters[type] = {};
+        for (const [name, count] of Object.entries(names)) {
+          filters[type][name] = true;
+          const id = `cb-${type}-${name}`;
           const label = document.createElement('label');
-          const input = document.createElement('input');
-          input.type = 'checkbox';
-          input.checked = true;
-          input.value = val;
-          input.onchange = () => {
-            if (input.checked) activeFilters.add(val);
-            else activeFilters.delete(val);
-            refreshMap();
-          };
-          label.appendChild(input);
-          label.appendChild(document.createTextNode(` ${val} (${count})`));
-          list.appendChild(label);
-          list.appendChild(document.createElement('br'));
-        });
-        title.onclick = () => list.style.display = list.style.display === 'block' ? 'none' : 'block';
-        div.appendChild(title);
-        div.appendChild(list);
-        container.appendChild(div);
-      });
-    }
-
-    async function fetchGoogleSheet(callback) {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
-      const response = await fetch(url);
-      const json = await response.json();
-      const [headers, ...rows] = json.values;
-      let lastAddress = '', lastOrder = '', lastContainer = '', lastLat = '', lastLng = '';
-      const data = rows.map(row => {
-        const obj = {};
-        headers.forEach((header, i) => {
-          obj[header.trim()] = row[i] ? row[i].trim() : "";
-        });
-        if (!obj["Адрес"]) obj["Адрес"] = lastAddress;
-        if (!obj["№ заказа"]) obj["№ заказа"] = lastOrder;
-        if (!obj["Тарное место"]) obj["Тарное место"] = lastContainer;
-        if (!obj["LAT"]) obj["LAT"] = lastLat;
-        if (!obj["LNG"]) obj["LNG"] = lastLng;
-        lastAddress = obj["Адрес"];
-        lastOrder = obj["№ заказа"];
-        lastContainer = obj["Тарное место"];
-        lastLat = obj["LAT"];
-        lastLng = obj["LNG"];
-        return {
-          address: obj["Адрес"], order: obj["№ заказа"], container: obj["Тарное место"],
-          type: obj["Тип детали"], item: obj["Наименование"], qty: obj["Кол-во"], delivered: obj["Дата досыла"],
-          shipped: obj["Дата отгрузки"],
-          lat: obj["LAT"].replace(',', '.'), lng: obj["LNG"].replace(',', '.')
-        };
-      });
-      callback(data);
-    }
-
-    function createPlacemark(coords, group, address) {
-      let content = `<b>${address}</b><br>`;
-      const byOrder = {};
-      group.forEach(entry => {
-        if (!byOrder[entry.order]) byOrder[entry.order] = { delivered: [], pending: [] };
-        (entry.delivered ? byOrder[entry.order].delivered : byOrder[entry.order].pending).push(entry);
-      });
-
-      for (const order in byOrder) {
-        const pending = byOrder[order].pending;
-        const delivered = byOrder[order].delivered;
-        const totalQty = [...pending, ...delivered].reduce((sum, el) => sum + parseInt(el.qty || '0'), 0);
-        content += `<hr><b>Лифт ${order}</b> — <i>${totalQty} шт</i>`;
-        content += '<ul>';
-        pending.forEach(el => {
-          content += `<li><b>${el.type}</b>: ${el.item} — ${el.qty} шт. (ТМ: ${el.container})</li>`;
-        });
-        if (delivered.length) content += '<li><i>↓ Доставленные ↓</i></li>';
-        delivered.forEach(el => {
-          content += `<li style="color:green"><b>${el.type}</b>: ${el.item} — ${el.qty} шт. (ТМ: ${el.container})</li>`;
-        });
-        content += '</ul>';
+          label.className = 'checkbox-item';
+          label.innerHTML = `<input type="checkbox" id="${id}" checked> ${name} (${count})`;
+          label.querySelector('input').addEventListener('change', () => {
+            filters[type][name] = label.querySelector('input').checked;
+            renderMarkers();
+          });
+          group.appendChild(label);
+        }
+        sidebar.appendChild(group);
       }
-
-      const isDelivered = group.every(g => g.delivered);
-      return new ymaps.Placemark(coords, {
-        balloonContent: content
-      }, {
-        preset: 'islands#circleIcon', iconColor: isDelivered ? 'green' : 'red'
-      });
     }
 
     ymaps.ready(() => {
       map = new ymaps.Map("map", {
-        center: [55.7904, 49.1346], zoom: 12, controls: ['zoomControl']
+        center: [55.79, 49.12],
+        zoom: 11
       });
-
-      fetchGoogleSheet(function(data) {
-        allData = data.filter(row => row.lat && row.lng);
-        allData.forEach(row => {
-          if (!filters[row.type]) filters[row.type] = new Map();
-          filters[row.type].set(row.item, (filters[row.type].get(row.item) || 0) + parseInt(row.qty || '0'));
-          activeFilters.add(row.item);
-        });
-        for (const key in filters) filters[key] = Array.from(filters[key]);
-        renderFilters();
-        refreshMap();
-      });
+      renderMarkers();
     });
   </script>
 </body>
