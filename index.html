@@ -55,7 +55,6 @@
       <button onclick="toggleAllFilters(false)">Убрать все</button>
     </div>
     <div id="filters"></div>
-    <div id="summary" class="summary"></div>
   </div>
   <div id="map"></div>
   <script>
@@ -66,6 +65,7 @@
     let allData = [], map;
     const allPlacemarks = [];
     const filters = {};
+    const filterCounts = {};
     const activeFilters = new Set();
 
     function toggleSidebar() {
@@ -87,15 +87,11 @@
       allPlacemarks.length = 0;
 
       const filteredGroups = {};
-      const summary = {};
       allData.forEach(entry => {
         if (!activeFilters.has(entry.item)) return;
         const coordKey = `${entry.lat},${entry.lng}`;
         if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
         filteredGroups[coordKey].items.push(entry);
-
-        const summaryKey = `${entry.item}`;
-        summary[summaryKey] = (summary[summaryKey] || 0) + parseInt(entry.qty || '0');
       });
 
       for (const key in filteredGroups) {
@@ -104,9 +100,6 @@
         map.geoObjects.add(placemark);
         allPlacemarks.push({ placemark });
       }
-
-      const summaryDiv = document.getElementById('summary');
-      summaryDiv.innerHTML = '<b>Итоговое количество:</b><br>' + Object.entries(summary).map(([name, qty]) => `${name}: ${qty} шт.`).join('<br>');
     }
 
     function renderFilters() {
@@ -130,8 +123,9 @@
             else activeFilters.delete(val);
             refreshMap();
           };
+          const count = filterCounts[val] || 0;
           label.appendChild(input);
-          label.appendChild(document.createTextNode(' ' + val));
+          label.appendChild(document.createTextNode(` ${val} (${count})`));
           list.appendChild(label);
           list.appendChild(document.createElement('br'));
         });
@@ -207,6 +201,7 @@
           if (!filters[row.type]) filters[row.type] = new Set();
           filters[row.type].add(row.item);
           activeFilters.add(row.item);
+          filterCounts[row.item] = (filterCounts[row.item] || 0) + parseInt(row.qty || '0');
         });
         for (const key in filters) filters[key] = Array.from(filters[key]);
         renderFilters();
