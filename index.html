@@ -53,6 +53,7 @@
     <div class="filter-controls">
       <button onclick="toggleAllFilters(true)">Выбрать все</button>
       <button onclick="toggleAllFilters(false)">Убрать все</button>
+      <button onclick="toggleDelivered()" id="deliveredBtn">Скрыть доставленные</button>
     </div>
     <div id="filters"></div>
     <div id="summary" class="summary"></div>
@@ -67,6 +68,7 @@
     const allPlacemarks = [];
     const filters = {};
     const activeFilters = new Set();
+    let hideDelivered = false;
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('hidden');
@@ -82,6 +84,12 @@
       refreshMap();
     }
 
+    function toggleDelivered() {
+      hideDelivered = !hideDelivered;
+      document.getElementById('deliveredBtn').textContent = hideDelivered ? 'Показать доставленные' : 'Скрыть доставленные';
+      refreshMap();
+    }
+
     function refreshMap() {
       map.geoObjects.removeAll();
       allPlacemarks.length = 0;
@@ -90,6 +98,7 @@
       const summary = {};
       allData.forEach(entry => {
         if (!activeFilters.has(entry.item)) return;
+        if (hideDelivered && entry.delivered) return;
         const coordKey = `${entry.lat},${entry.lng}`;
         if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
         filteredGroups[coordKey].items.push(entry);
