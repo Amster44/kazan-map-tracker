@@ -19,24 +19,11 @@
     .sidebar h3 {
       margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 5px;
     }
-    .checkbox-group {
+    .filter-controls {
       margin-top: 10px;
     }
-    .checkbox-group label {
-      display: flex; align-items: center; margin: 4px 0;
-      font-size: 14px; cursor: pointer;
-    }
-    .checkbox-group input[type="checkbox"] {
-      margin-right: 8px;
-    }
-    .checkbox-group label:hover {
-      background-color: #f0f0f0; border-radius: 5px;
-    }
-    .filter-controls {
-      display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;
-    }
     .filter-controls button {
-      font-size: 12px; padding: 3px 6px; cursor: pointer;
+      font-size: 14px; padding: 4px 8px; margin-right: 5px; cursor: pointer;
     }
   </style>
   <script src="https://api-maps.yandex.ru/2.1/?apikey=a493d8d9-6875-4c13-91d6-08e7703b879f&lang=ru_RU" type="text/javascript"></script>
@@ -48,7 +35,6 @@
       <button onclick="toggleAll(true)">Выбрать все</button>
       <button onclick="toggleAll(false)">Убрать все</button>
     </div>
-    <div id="legend"></div>
   </div>
   <div id="map"></div>
   <script>
@@ -58,14 +44,6 @@
 
     let allData = [], map;
     const allPlacemarks = [];
-    const iconColors = {};
-
-    function generateColor(type) {
-      let hash = 0;
-      for (let i = 0; i < type.length; i++) hash = type.charCodeAt(i) + ((hash << 5) - hash);
-      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-      return '#' + '00000'.substring(0, 6 - c.length) + c;
-    }
 
     function toggleAll(state) {
       allPlacemarks.forEach(obj => {
@@ -120,8 +98,7 @@
       return new ymaps.Placemark(coords, {
         balloonContent: content
       }, {
-        iconColor: iconColors[group[0].type] || 'red',
-        preset: 'islands#circleIcon'
+        preset: 'islands#circleIcon', iconColor: 'red'
       });
     }
 
@@ -154,8 +131,6 @@
 
         for (const key in addressGroups) {
           const group = addressGroups[key];
-          const color = generateColor(group.items[0].type);
-          iconColors[group.items[0].type] = color;
           const placemark = createPlacemark(group.coords, group.items, group.items[0].address);
           map.geoObjects.add(placemark);
           allPlacemarks.push({ placemark });
