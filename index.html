@@ -19,22 +19,29 @@
     .sidebar h3 {
       margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 5px;
     }
-    .filter-controls {
-      margin-top: 10px;
+    .filter-group {
+      margin-bottom: 10px;
     }
     .filter-controls button {
-      font-size: 14px; padding: 4px 8px; margin-right: 5px; cursor: pointer;
+      font-size: 14px; padding: 4px 8px; margin: 5px 5px 5px 0; cursor: pointer;
+    }
+    .filter-category {
+      font-weight: bold; margin-top: 10px; cursor: pointer;
+    }
+    .filter-list {
+      margin-left: 10px; display: none;
     }
   </style>
   <script src="https://api-maps.yandex.ru/2.1/?apikey=a493d8d9-6875-4c13-91d6-08e7703b879f&lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
   <div class="sidebar">
-    <h3>Контроль отображения</h3>
+    <h3>Фильтр по типу и наименованию</h3>
     <div class="filter-controls">
-      <button onclick="toggleAll(true)">Выбрать все</button>
-      <button onclick="toggleAll(false)">Убрать все</button>
+      <button onclick="toggleAllFilters(true)">Выбрать все</button>
+      <button onclick="toggleAllFilters(false)">Убрать все</button>
     </div>
+    <div id="filters"></div>
   </div>
   <div id="map"></div>
   <script>
@@ -44,12 +51,72 @@
 
     let allData = [], map;
     const allPlacemarks = [];
+    const filters = { type: new Set(), item: new Set() };
+    const activeFilters = { type: new Set(), item: new Set() };
 
-    function toggleAll(state) {
-      allPlacemarks.forEach(obj => {
-        if (state) map.geoObjects.add(obj.placemark);
-        else map.geoObjects.remove(obj.placemark);
+    function toggleAllFilters(state) {
+      document.querySelectorAll('#filters input[type=checkbox]').forEach(cb => {
+        cb.checked = state;
+        const key = cb.dataset.key;
+        const value = cb.value;
+        if (state) activeFilters[key].add(value);
+        else activeFilters[key].delete(value);
       });
+      refreshMap();
+    }
+
+    function refreshMap() {
+      map.geoObjects.removeAll();
+      allPlacemarks.length = 0;
+
+      const filteredGroups = {};
+      allData.forEach(entry => {
+        if (!activeFilters.type.has(entry.type) || !activeFilters.item.has(entry.item)) return;
+        const coordKey = `${entry.lat},${entry.lng}`;
+        if (!filteredGroups[coordKey]) filteredGroups[coordKey] = { coords: [parseFloat(entry.lat), parseFloat(entry.lng)], items: [] };
+        filteredGroups[coordKey].items.push(entry);
+      });
+
+      for (const key in filteredGroups) {
+        const group = filteredGroups[key];
+        const placemark = createPlacemark(group.coords, group.items, group.items[0].address);
+        map.geoObjects.add(placemark);
+        allPlacemarks.push({ placemark });
+      }
+    }
+
+    function renderFilters() {
+      const container = document.getElementById('filters');
+      container.innerHTML = '';
+      for (const key in filters) {
+        const div = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'filter-category';
+        title.textContent = key === 'type' ? 'Тип детали' : 'Наименование';
+        const list = document.createElement('div');
+        list.className = 'filter-list';
+        filters[key].forEach(val => {
+          const label = document.createElement('label');
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.checked = true;
+          input.value = val;
+          input.dataset.key = key;
+          input.onchange = () => {
+            if (input.checked) activeFilters[key].add(val);
+            else activeFilters[key].delete(val);
+            refreshMap();
+          };
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(' ' + val));
+          list.appendChild(label);
+          list.appendChild(document.createElement('br'));
+        });
+        title.onclick = () => list.style.display = list.style.display === 'block' ? 'none' : 'block';
+        div.appendChild(title);
+        div.appendChild(list);
+        container.appendChild(div);
+      }
     }
 
     async function fetchGoogleSheet(callback) {
@@ -69,7 +136,11 @@
         lastAddress = obj["Адрес"];
         lastOrder = obj["№ заказа"];
         lastContainer = obj["Тарное место"];
-        return obj;
+        return {
+          address: obj["Адрес"], order: obj["№ заказа"], container: obj["Тарное место"],
+          type: obj["Тип детали"], item: obj["Наименование"], qty: obj["Кол-во"], delivered: obj["Дата досыла"],
+          lat: obj["LAT"], lng: obj["LNG"]
+        };
       });
       callback(data);
     }
@@ -109,32 +180,14 @@
 
       fetchGoogleSheet(function(data) {
         allData = data;
-        const addressGroups = {};
-
-        data.forEach(row => {
-          const address = row["Адрес"]?.trim();
-          const order = row["№ заказа"]?.trim();
-          const container = row["Тарное место"]?.trim();
-          const item = row["Наименование"] || "";
-          const qty = row["Кол-во"] || "";
-          const type = row["Тип детали"] || "";
-          const delivered = row["Дата досыла"] || "";
-          const lat = row["lat"] || row["LAT"];
-          const lng = row["lng"] || row["LNG"];
-
-          if (!address || !order || !lat || !lng) return;
-
-          const coordKey = `${lat},${lng}`;
-          if (!addressGroups[coordKey]) addressGroups[coordKey] = { coords: [parseFloat(lat), parseFloat(lng)], items: [] };
-          addressGroups[coordKey].items.push({ address, order, container, type, item, qty, delivered });
+        allData.forEach(row => {
+          filters.type.add(row.type);
+          filters.item.add(row.item);
+          activeFilters.type.add(row.type);
+          activeFilters.item.add(row.item);
         });
-
-        for (const key in addressGroups) {
-          const group = addressGroups[key];
-          const placemark = createPlacemark(group.coords, group.items, group.items[0].address);
-          map.geoObjects.add(placemark);
-          allPlacemarks.push({ placemark });
-        }
+        renderFilters();
+        refreshMap();
       });
     });
   </script>
