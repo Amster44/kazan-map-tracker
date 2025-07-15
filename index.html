@@ -161,12 +161,10 @@
         lastContainer = obj["Тарное место"];
         return {
           address: obj["Адрес"], order: obj["№ заказа"], container: obj["Тарное место"],
-          type: obj["Тип детали"] || "Без категории", item: obj["Наименование"] || "Неизвестно", qty: obj["Кол-во"], delivered: obj["Дата досыла"],
+          type: obj["Тип детали"], item: obj["Наименование"], qty: obj["Кол-во"], delivered: obj["Дата досыла"],
           lat: obj["LAT"], lng: obj["LNG"]
         };
-      }).filter(el => el.lat && el.lng);
-
-      console.log('Загружено строк:', data.length);
+      });
       callback(data);
     }
 
